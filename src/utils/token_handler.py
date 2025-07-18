@@ -153,9 +153,12 @@ class TokenHandler:
             decoded = jwt.decode(token, self.secret, algorithms=[self.algorithm])
             log.info("Token successfully decoded")
             return Token(**decoded)
+        except jwt.ExpiredSignatureError:
+            log.warning("Token has expired")
+            return None
         except jwt.InvalidTokenError:
             log.error("Token decoding failed due to invalid token", exc_info=True)
-            raise
+            return None
 
     def decode_refresh_token(self, token: str) -> dict:
         payload = jwt.decode(token, self.secret, algorithms=[self.algorithm])

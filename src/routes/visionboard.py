@@ -51,7 +51,8 @@ def get_token_handler():
 
 def get_user_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
     token = get_token_handler().decode_token(credentials.credentials)
-    print('DEBUG: Decoded token:', token)
+    if token is None:
+        raise HTTPException(status_code=401, detail="Token is expired or invalid")
     return token
 
 def to_serializable(obj):

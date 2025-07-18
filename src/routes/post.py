@@ -66,6 +66,16 @@ async def get_feed(request: Request, limit: int = 10, cursor: Optional[str] = No
     handler = get_post_handler(request)
     return await handler.get_feed(limit=limit, cursor=cursor)
 
+@router.get("/trending", response_model=dict)
+async def get_trending_posts(request: Request, limit: int = 10, cursor: Optional[str] = None):
+    handler = get_post_handler(request)
+    try:
+        return await handler.get_trending_posts(limit, cursor)
+    except Exception as e:
+        import logging
+        logging.error(f"Error in /posts/trending: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
 @router.get("/{post_id}", response_model=PostWithDetails)
 async def get_post(post_id: str, request: Request):
     import uuid
@@ -112,11 +122,6 @@ async def get_user_posts(user_id: str, request: Request, limit: int = 10, cursor
 async def search_posts(request: Request, q: str, tag: Optional[str] = None, limit: int = 10, cursor: Optional[str] = None):
     handler = get_post_handler(request)
     return await handler.search_posts(q, tag, limit, cursor)
-
-@router.get("/trending", response_model=dict)
-async def get_trending_posts(request: Request, limit: int = 10, cursor: Optional[str] = None):
-    handler = get_post_handler(request)
-    return await handler.get_trending_posts(limit, cursor)
 
 @router.delete("/{post_id}")
 async def soft_delete_post(post_id: str, request: Request, token: Token = Depends(get_user_token)):

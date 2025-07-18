@@ -279,6 +279,8 @@ class PostHandler:
             next_cursor = None
             if len(rows) > limit:
                 next_cursor = str(rows[limit - 1]['created_at'].isoformat())
+            posts = [p for p in posts if p is not None]
+            logger.debug(f"Trending posts returned: {len(posts)}")
             return {"posts": posts, "nextCursor": next_cursor}
 
     async def soft_delete_post(self, post_id: uuid.UUID, user_id: uuid.UUID):
@@ -289,38 +291,44 @@ class PostHandler:
             )
 
     async def _post_with_details(self, conn, row) -> PostWithDetails:
-        post_id = row['id']
-        # Media
-        media_rows = await conn.fetch("SELECT * FROM post_media WHERE post_id = $1 ORDER BY \"order\" ASC", post_id)
-        media = [PostMedia(**dict(m)) for m in media_rows]
-        # Tags
-        tag_rows = await conn.fetch("SELECT tag FROM post_tags WHERE post_id = $1", post_id)
-        tags = [r['tag'] for r in tag_rows]
-        # Collaborators
-        collab_rows = await conn.fetch("SELECT post_id, user_id, role FROM post_collaborators WHERE post_id = $1", post_id)
-        collaborators = [PostCollaborator(**dict(c)) for c in collab_rows]
-        # Like count
-        like_count = await conn.fetchval("SELECT COUNT(*) FROM post_likes WHERE post_id = $1", post_id) or 0
-        # Comment count
-        comment_count = await conn.fetchval("SELECT COUNT(*) FROM post_comments WHERE post_id = $1 AND deleted_at IS NULL", post_id) or 0
-        # View count
-        view_count = await conn.fetchval("SELECT COUNT(*) FROM post_views WHERE post_id = $1", post_id) or 0
-        # Author name (optional, join users)
-        author_name = await conn.fetchval("SELECT name FROM users WHERE id = $1", row['user_id'])
-        # Top comments (first 3 root comments)
-        top_comment_rows = await conn.fetch(
-            "SELECT * FROM post_comments WHERE post_id = $1 AND parent_comment_id IS NULL AND deleted_at IS NULL ORDER BY created_at ASC LIMIT 3",
-            post_id
-        )
-        top_comments = [PostComment(**dict(tc)) for tc in top_comment_rows]
-        return PostWithDetails(
-            **dict(row),
-            media=media,
-            tags=tags,
-            collaborators=collaborators,
-            like_count=like_count,
-            comment_count=comment_count,
-            view_count=view_count,
-            author_name=author_name,
-            top_comments=top_comments
-        ) 
+        try:
+            # Do NOT parse post_id as UUID here; keep as string for trending/feed endpoints
+            post_id = row['id']
+            # Media
+            media_rows = await conn.fetch("SELECT * FROM post_media WHERE post_id = $1 ORDER BY \"order\" ASC", post_id)
+            media = [PostMedia(**dict(m)) for m in media_rows]
+            # Tags
+            tag_rows = await conn.fetch("SELECT tag FROM post_tags WHERE post_id = $1", post_id)
+            tags = [r['tag'] for r in tag_rows]
+            # Collaborators
+            collab_rows = await conn.fetch("SELECT post_id, user_id, role FROM post_collaborators WHERE post_id = $1", post_id)
+            collaborators = [PostCollaborator(**dict(c)) for c in collab_rows]
+            # Like count
+            like_count = await conn.fetchval("SELECT COUNT(*) FROM post_likes WHERE post_id = $1", post_id) or 0
+            # Comment count
+            comment_count = await conn.fetchval("SELECT COUNT(*) FROM post_comments WHERE post_id = $1 AND deleted_at IS NULL", post_id) or 0
+            # View count
+            view_count = await conn.fetchval("SELECT COUNT(*) FROM post_views WHERE post_id = $1", post_id) or 0
+            # Author name (optional, join users)
+            author_name = await conn.fetchval("SELECT name FROM users WHERE id = $1", row['user_id'])
+            # Top comments (first 3 root comments)
+            top_comment_rows = await conn.fetch(
+                "SELECT * FROM post_comments WHERE post_id = $1 AND parent_comment_id IS NULL AND deleted_at IS NULL ORDER BY created_at ASC LIMIT 3",
+                post_id
+            )
+            top_comments = [PostComment(**dict(tc)) for tc in top_comment_rows]
+            return PostWithDetails(
+                **dict(row),
+                media=media,
+                tags=tags,
+                collaborators=collaborators,
+                like_count=like_count,
+                comment_count=comment_count,
+                view_count=view_count,
+                author_name=author_name,
+                top_comments=top_comments
+            )
+        except Exception as e:
+            import logging
+            logging.error(f"Error in _post_with_details for post_id={row.get('id')}: {e}")
+            return None 

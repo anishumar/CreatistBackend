@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
 from typing import Optional
@@ -18,7 +18,10 @@ security = HTTPBearer()
 
 
 def get_user_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    return token_handler.decode_token(credentials.credentials)
+    token = token_handler.decode_token(credentials.credentials)
+    if token is None:
+        raise HTTPException(status_code=401, detail="Token is expired or invalid")
+    return token
 
 
 class StatusUpdate(BaseModel):
