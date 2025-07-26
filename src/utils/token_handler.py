@@ -33,7 +33,7 @@ class Token(BaseModel):
 
 class RefreshToken(BaseModel):
     sub: UUID
-    jti: str  # JWT ID for token revocation
+    jti: Optional[str] = None  # JWT ID for token revocation (optional for backward compatibility)
     iat: int = Field(
         default_factory=lambda: int(datetime.now(timezone("UTC")).timestamp())
     )
@@ -88,6 +88,7 @@ class TokenHandler:
         refresh_payload = {
             "sub": str(user.id),
             "type": "refresh",
+            "jti": jti,  # Include the JWT ID
             "iat": now,
             "exp": now + 60 * 60 * 24 * 7  # 7 days
         }
@@ -95,7 +96,7 @@ class TokenHandler:
         log.info("Refresh token created for user: %s", user.id)
         return token
 
-    def refresh_access_token(self, refresh_token: str) -> Optional[str]:
+    async def refresh_access_token(self, refresh_token: str) -> Optional[str]:
         """Use refresh token to get new access token"""
         try:
             decoded = jwt.decode(refresh_token, self.secret, algorithms=[self.algorithm])
@@ -109,7 +110,7 @@ class TokenHandler:
             # Get user and create new access token
             # In production, fetch user from database
             from src.app import user_handler
-            user = user_handler.fetch_user(user_id=refresh_payload.sub)
+            user = await user_handler.fetch_user(user_id=refresh_payload.sub)
             if not user:
                 log.warning("User not found for refresh token")
                 return None

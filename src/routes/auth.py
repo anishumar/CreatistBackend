@@ -74,7 +74,7 @@ async def fetch_user_route(token: Token = Depends(get_user_token)) -> User:
 @router.post("/refresh")
 async def refresh_route(request: Request, refresh_request: RefreshRequest) -> JSONResponse:
     """Refresh access token using refresh token"""
-    new_access_token = token_handler.refresh_access_token(refresh_request.refresh_token)
+    new_access_token = await token_handler.refresh_access_token(refresh_request.refresh_token)
     
     if not new_access_token:
         raise HTTPException(status_code=401, detail="Invalid or expired refresh token")
