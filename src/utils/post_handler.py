@@ -149,23 +149,45 @@ class PostHandler:
             logger.error(f"   Post data: {post.model_dump()}")
             raise
 
-    async def get_feed(self, limit: int = 10, cursor: Optional[str] = None) -> dict:
+    async def get_feed(self, user_id: uuid.UUID, limit: int = 10, cursor: Optional[str] = None) -> dict:
+        import datetime
+        import json
         async with self.pool.acquire() as conn:
-            params = []
-            query = "SELECT * FROM posts WHERE deleted_at IS NULL"
+            params = [user_id]
+            query = """
+                SELECT p.* FROM posts p
+                INNER JOIN followers f ON p.user_id = f.following_id
+                WHERE p.deleted_at IS NULL AND f.user_id = $1
+            """
+            parsed_cursor = None
             if cursor:
-                import datetime
-                if isinstance(cursor, str):
-                    cursor = datetime.datetime.fromisoformat(cursor)
-                query += " AND created_at < $1"
-                params.append(cursor)
-            query += " ORDER BY created_at DESC LIMIT $%d" % (len(params) + 1)
+                try:
+                    if isinstance(cursor, str):
+                        cursor_data = json.loads(cursor)
+                        parsed_cursor = (
+                            datetime.datetime.fromisoformat(cursor_data['created_at']),
+                            cursor_data['id']
+                        )
+                    else:
+                        parsed_cursor = cursor
+                except Exception as e:
+                    import logging
+                    logging.warning(f"Invalid cursor format: {cursor}. Error: {e}. Fetching from latest.")
+                    parsed_cursor = None
+            if parsed_cursor:
+                query += " AND (p.created_at, p.id) < ($2, $3)"
+                params.extend(parsed_cursor)
+            query += " ORDER BY p.created_at DESC, p.id DESC LIMIT $%d" % (len(params) + 1)
             params.append(limit + 1)
             rows = await conn.fetch(query, *params)
             posts = [await self._post_with_details(conn, row) for row in rows[:limit]]
             next_cursor = None
             if len(rows) > limit:
-                next_cursor = str(rows[limit - 1]['created_at'].isoformat())
+                last_row = rows[limit - 1]
+                next_cursor = json.dumps({
+                    'created_at': last_row['created_at'].isoformat(),
+                    'id': str(last_row['id'])
+                })
             return {"posts": posts, "nextCursor": next_cursor}
 
     async def get_post_by_id(self, post_id: uuid.UUID) -> Optional[PostWithDetails]:
@@ -254,6 +276,8 @@ class PostHandler:
             return [await self._post_with_details(conn, row) for row in rows]
 
     async def get_trending_posts(self, limit: int = 10, cursor: Optional[str] = None) -> dict:
+        import datetime
+        import json
         async with self.pool.acquire() as conn:
             query = """
                 SELECT p.* FROM posts p
@@ -266,19 +290,35 @@ class PostHandler:
                 WHERE p.deleted_at IS NULL
             """
             params = []
+            parsed_cursor = None
             if cursor:
-                import datetime
-                if isinstance(cursor, str):
-                    cursor = datetime.datetime.fromisoformat(cursor)
-                query += " AND p.created_at < $1"
-                params.append(cursor)
-            query += " ORDER BY COALESCE(l.like_count,0) DESC, COALESCE(v.view_count,0) DESC, p.created_at DESC LIMIT $%d" % (len(params) + 1)
+                try:
+                    if isinstance(cursor, str):
+                        cursor_data = json.loads(cursor)
+                        parsed_cursor = (
+                            datetime.datetime.fromisoformat(cursor_data['created_at']),
+                            cursor_data['id']
+                        )
+                    else:
+                        parsed_cursor = cursor
+                except Exception as e:
+                    import logging
+                    logging.warning(f"Invalid cursor format: {cursor}. Error: {e}. Fetching from latest.")
+                    parsed_cursor = None
+            if parsed_cursor:
+                query += " AND (p.created_at, p.id) < ($1, $2)"
+                params.extend(parsed_cursor)
+            query += " ORDER BY COALESCE(l.like_count,0) DESC, COALESCE(v.view_count,0) DESC, p.created_at DESC, p.id DESC LIMIT $%d" % (len(params) + 1)
             params.append(limit + 1)
             rows = await conn.fetch(query, *params)
             posts = [await self._post_with_details(conn, row) for row in rows[:limit]]
             next_cursor = None
             if len(rows) > limit:
-                next_cursor = str(rows[limit - 1]['created_at'].isoformat())
+                last_row = rows[limit - 1]
+                next_cursor = json.dumps({
+                    'created_at': last_row['created_at'].isoformat(),
+                    'id': str(last_row['id'])
+                })
             posts = [p for p in posts if p is not None]
             logger.debug(f"Trending posts returned: {len(posts)}")
             return {"posts": posts, "nextCursor": next_cursor}

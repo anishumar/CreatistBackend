@@ -62,9 +62,9 @@ async def create_post(post: PostCreate, request: Request, token: Token = Depends
         raise HTTPException(status_code=500, detail=f"Failed to create post: {str(e)}")
 
 @router.get("/feed", response_model=dict)
-async def get_feed(request: Request, limit: int = 10, cursor: Optional[str] = None):
+async def get_feed(request: Request, limit: int = 10, cursor: Optional[str] = None, token: Token = Depends(get_user_token)):
     handler = get_post_handler(request)
-    return await handler.get_feed(limit=limit, cursor=cursor)
+    return await handler.get_feed(user_id=token.sub, limit=limit, cursor=cursor)
 
 @router.get("/trending", response_model=dict)
 async def get_trending_posts(request: Request, limit: int = 10, cursor: Optional[str] = None):
