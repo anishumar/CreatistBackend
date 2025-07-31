@@ -18,4 +18,5 @@ else:
         pass
 
 if __name__ == "__main__":
+    os.environ["SSL_CERT_FILE"] = ""
     uvicorn.run("src:app", host=HOST, port=int(PORT), reload=True)
