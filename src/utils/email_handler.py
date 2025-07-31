@@ -5,8 +5,6 @@ from email.message import EmailMessage
 
 from aiosmtplib import send
 
-os.environ["SSL_CERT_FILE"] = "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/certifi/cacert.pem"
-
 with open("static/otp-content.html", "r") as file:
     OTP_CONTENT = file.read()
 
