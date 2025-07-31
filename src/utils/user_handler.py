@@ -12,18 +12,20 @@ from src.models.user import (
     ShowCaseLike, ShowCaseBookmark, CommentUpvote,
     VisionBoardTask, Follower, Location
 )
-from supabase import AsyncClient, create_async_client
+from supabase import AsyncClient, create_async_client, AsyncClientOptions
 from fastapi import HTTPException
 
 load_dotenv()
 
-
+_options = AsyncClientOptions()
+_options.headers.update({"verify_ssl": False})
 class UserHandler:
     supabase: AsyncClient
 
     async def init(self):
         self.supabase = await create_async_client(
-            os.environ.get("SUPABASE_URL"), os.environ.get("SUPABASE_KEY")
+            os.environ.get("SUPABASE_URL"), os.environ.get("SUPABASE_KEY"),
+            options=_options
         )
 
     # User Management Methods
