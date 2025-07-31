@@ -149,25 +149,16 @@ class PostHandler:
             logger.error(f"   Post data: {post.model_dump()}")
             raise
 
-    async def get_feed(self, user_id: uuid.UUID, limit: int = 10, cursor: Optional[str] = None) -> dict:
+    async def get_feed(self, limit: int = 10, cursor: Optional[str] = None) -> dict:
         import datetime
-        import json
         async with self.pool.acquire() as conn:
-            params = [user_id]
-            query = """
-                SELECT p.* FROM posts p
-                INNER JOIN followers f ON p.user_id = f.following_id
-                WHERE p.deleted_at IS NULL AND f.user_id = $1
-            """
+            params = []
+            query = "SELECT * FROM posts WHERE deleted_at IS NULL"
             parsed_cursor = None
             if cursor:
                 try:
                     if isinstance(cursor, str):
-                        cursor_data = json.loads(cursor)
-                        parsed_cursor = (
-                            datetime.datetime.fromisoformat(cursor_data['created_at']),
-                            cursor_data['id']
-                        )
+                        parsed_cursor = datetime.datetime.fromisoformat(cursor)
                     else:
                         parsed_cursor = cursor
                 except Exception as e:
@@ -175,19 +166,155 @@ class PostHandler:
                     logging.warning(f"Invalid cursor format: {cursor}. Error: {e}. Fetching from latest.")
                     parsed_cursor = None
             if parsed_cursor:
-                query += " AND (p.created_at, p.id) < ($2, $3)"
-                params.extend(parsed_cursor)
-            query += " ORDER BY p.created_at DESC, p.id DESC LIMIT $%d" % (len(params) + 1)
+                query += " AND created_at < $1"
+                params.append(parsed_cursor)
+            query += " ORDER BY created_at DESC LIMIT $%d" % (len(params) + 1)
             params.append(limit + 1)
             rows = await conn.fetch(query, *params)
             posts = [await self._post_with_details(conn, row) for row in rows[:limit]]
             next_cursor = None
             if len(rows) > limit:
-                last_row = rows[limit - 1]
-                next_cursor = json.dumps({
-                    'created_at': last_row['created_at'].isoformat(),
-                    'id': str(last_row['id'])
-                })
+                next_cursor = str(rows[limit - 1]['created_at'].isoformat())
+            return {"posts": posts, "nextCursor": next_cursor}
+
+    async def get_following_feed(self, user_id: uuid.UUID, limit: int = 10, cursor: Optional[str] = None) -> dict:
+        """
+        Get posts only from users that the logged-in user is following
+        """
+        import datetime
+        import logging
+        async with self.pool.acquire() as conn:
+            params = [user_id]
+            
+            # Base query to get posts from users the current user is following
+            query = """
+                SELECT p.* FROM posts p
+                INNER JOIN followers f ON p.user_id = f.following_id
+                WHERE f.user_id = $1 AND p.deleted_at IS NULL
+            """
+            
+            # Parse cursor
+            if cursor:
+                try:
+                    # Handle JSON cursor format from frontend
+                    if cursor.startswith('{') and cursor.endswith('}'):
+                        import json
+                        cursor_data = json.loads(cursor)
+                        if 'cursor' in cursor_data:
+                            cursor = cursor_data['cursor']
+                            logging.info(f"Extracted cursor from JSON: {cursor}")
+                    
+                    if '_' in cursor:
+                        # Composite cursor: timestamp_postid
+                        timestamp_str, post_id_str = cursor.split('_', 1)
+                        
+                        # Fix URL encoding issue: replace space with + for timezone
+                        timestamp_str = timestamp_str.replace(' ', '+')
+                        
+                        cursor_timestamp = datetime.datetime.fromisoformat(timestamp_str)
+                        cursor_post_id = post_id_str
+                        
+                        # Use composite cursor for more precise pagination
+                        query += " AND (p.created_at < $2 OR (p.created_at = $2 AND p.id < $3))"
+                        params.extend([cursor_timestamp, cursor_post_id])
+                        
+                        logging.info(f"Using composite cursor: timestamp={cursor_timestamp}, post_id={cursor_post_id}")
+                    else:
+                        # Simple timestamp cursor
+                        cursor_timestamp = datetime.datetime.fromisoformat(cursor)
+                        query += " AND p.created_at < $2"
+                        params.append(cursor_timestamp)
+                        
+                        logging.info(f"Using timestamp cursor: {cursor_timestamp}")
+                except Exception as e:
+                    logging.warning(f"Invalid cursor format: {cursor}. Error: {e}. Fetching from latest.")
+            
+            query += " ORDER BY p.created_at DESC, p.id DESC LIMIT $%d" % (len(params) + 1)
+            params.append(limit + 1)
+            
+            logging.info(f"Final query: {query}")
+            logging.info(f"Params: {params}")
+            
+            rows = await conn.fetch(query, *params)
+            logging.info(f"Fetched {len(rows)} rows")
+            
+            posts = [await self._post_with_details(conn, row) for row in rows[:limit]]
+            
+            next_cursor = None
+            if len(rows) > limit:
+                next_cursor = f"{rows[limit]['created_at'].isoformat()}_{rows[limit]['id']}"
+                logging.info(f"Next cursor: {next_cursor}")
+            
+            return {"posts": posts, "nextCursor": next_cursor}
+
+    async def get_following_feed_by_user_id(self, target_user_id: uuid.UUID, limit: int = 10, cursor: Optional[str] = None) -> dict:
+        """
+        Get posts from users that a specific user is following (for profile views)
+        """
+        import datetime
+        import logging
+        async with self.pool.acquire() as conn:
+            params = [target_user_id]
+            
+            # Base query to get posts from users the target user is following
+            query = """
+                SELECT p.* FROM posts p
+                INNER JOIN followers f ON p.user_id = f.following_id
+                WHERE f.user_id = $1 AND p.deleted_at IS NULL
+            """
+            
+            # Parse cursor
+            if cursor:
+                try:
+                    # Handle JSON cursor format from frontend
+                    if cursor.startswith('{') and cursor.endswith('}'):
+                        import json
+                        cursor_data = json.loads(cursor)
+                        if 'cursor' in cursor_data:
+                            cursor = cursor_data['cursor']
+                            logging.info(f"Extracted cursor from JSON: {cursor}")
+                    
+                    if '_' in cursor:
+                        # Composite cursor: timestamp_postid
+                        timestamp_str, post_id_str = cursor.split('_', 1)
+                        
+                        # Fix URL encoding issue: replace space with + for timezone
+                        timestamp_str = timestamp_str.replace(' ', '+')
+                        
+                        cursor_timestamp = datetime.datetime.fromisoformat(timestamp_str)
+                        cursor_post_id = post_id_str
+                        
+                        # Use composite cursor for more precise pagination
+                        query += " AND (p.created_at < $2 OR (p.created_at = $2 AND p.id < $3))"
+                        params.extend([cursor_timestamp, cursor_post_id])
+                        
+                        logging.info(f"Using composite cursor: timestamp={cursor_timestamp}, post_id={cursor_post_id}")
+                    else:
+                        # Simple timestamp cursor
+                        cursor_timestamp = datetime.datetime.fromisoformat(cursor)
+                        query += " AND p.created_at < $2"
+                        params.append(cursor_timestamp)
+                        
+                        logging.info(f"Using timestamp cursor: {cursor_timestamp}")
+                except Exception as e:
+                    logging.warning(f"Invalid cursor format: {cursor}. Error: {e}. Fetching from latest.")
+            
+            query += " ORDER BY p.created_at DESC, p.id DESC LIMIT $%d" % (len(params) + 1)
+            params.append(limit + 1)
+            
+            logging.info(f"Final query: {query}")
+            logging.info(f"Params: {params}")
+            
+            rows = await conn.fetch(query, *params)
+            logging.info(f"Fetched {len(rows)} rows")
+            
+            posts = [await self._post_with_details(conn, row) for row in rows[:limit]]
+            
+            next_cursor = None
+            if len(rows) > limit:
+                next_cursor = f"{rows[limit]['created_at'].isoformat()}_{rows[limit]['id']}"
+                logging.info(f"Next cursor: {next_cursor}")
+            
             return {"posts": posts, "nextCursor": next_cursor}
 
     async def get_post_by_id(self, post_id: uuid.UUID) -> Optional[PostWithDetails]:
@@ -277,7 +404,7 @@ class PostHandler:
 
     async def get_trending_posts(self, limit: int = 10, cursor: Optional[str] = None) -> dict:
         import datetime
-        import json
+        import logging
         async with self.pool.acquire() as conn:
             query = """
                 SELECT p.* FROM posts p
@@ -290,35 +417,63 @@ class PostHandler:
                 WHERE p.deleted_at IS NULL
             """
             params = []
-            parsed_cursor = None
+            
+            # Parse cursor
             if cursor:
                 try:
-                    if isinstance(cursor, str):
+                    # Handle JSON cursor format from frontend
+                    if cursor.startswith('{') and cursor.endswith('}'):
+                        import json
                         cursor_data = json.loads(cursor)
-                        parsed_cursor = (
-                            datetime.datetime.fromisoformat(cursor_data['created_at']),
-                            cursor_data['id']
-                        )
+                        if 'cursor' in cursor_data:
+                            cursor = cursor_data['cursor']
+                            logging.info(f"Extracted cursor from JSON: {cursor}")
+                    
+                    # Handle composite cursor format
+                    if '_' in cursor:
+                        # Composite cursor: timestamp_postid
+                        timestamp_str, post_id_str = cursor.split('_', 1)
+                        
+                        # Fix URL encoding issue: replace space with + for timezone
+                        timestamp_str = timestamp_str.replace(' ', '+')
+                        
+                        cursor_timestamp = datetime.datetime.fromisoformat(timestamp_str)
+                        cursor_post_id = post_id_str
+                        
+                        # Use composite cursor for more precise pagination
+                        query += " AND (p.created_at < $1 OR (p.created_at = $1 AND p.id < $2))"
+                        params.extend([cursor_timestamp, cursor_post_id])
+                        
+                        logging.info(f"Using composite cursor: timestamp={cursor_timestamp}, post_id={cursor_post_id}")
                     else:
-                        parsed_cursor = cursor
+                        # Simple timestamp cursor
+                        # Fix URL encoding issue: replace space with + for timezone
+                        cursor = cursor.replace(' ', '+')
+                        cursor_timestamp = datetime.datetime.fromisoformat(cursor)
+                        query += " AND p.created_at < $1"
+                        params.append(cursor_timestamp)
+                        
+                        logging.info(f"Using timestamp cursor: {cursor_timestamp}")
                 except Exception as e:
-                    import logging
                     logging.warning(f"Invalid cursor format: {cursor}. Error: {e}. Fetching from latest.")
-                    parsed_cursor = None
-            if parsed_cursor:
-                query += " AND (p.created_at, p.id) < ($1, $2)"
-                params.extend(parsed_cursor)
+            
             query += " ORDER BY COALESCE(l.like_count,0) DESC, COALESCE(v.view_count,0) DESC, p.created_at DESC, p.id DESC LIMIT $%d" % (len(params) + 1)
             params.append(limit + 1)
+            
+            logging.info(f"Final query: {query}")
+            logging.info(f"Params: {params}")
+            
             rows = await conn.fetch(query, *params)
+            logging.info(f"Fetched {len(rows)} rows")
+            
             posts = [await self._post_with_details(conn, row) for row in rows[:limit]]
+            
             next_cursor = None
             if len(rows) > limit:
-                last_row = rows[limit - 1]
-                next_cursor = json.dumps({
-                    'created_at': last_row['created_at'].isoformat(),
-                    'id': str(last_row['id'])
-                })
+                # Use composite cursor: timestamp_postid for uniqueness
+                next_cursor = f"{rows[limit]['created_at'].isoformat()}_{rows[limit]['id']}"
+                logging.info(f"Next cursor: {next_cursor}")
+            
             posts = [p for p in posts if p is not None]
             logger.debug(f"Trending posts returned: {len(posts)}")
             return {"posts": posts, "nextCursor": next_cursor}

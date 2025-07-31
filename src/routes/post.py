@@ -64,7 +64,29 @@ async def create_post(post: PostCreate, request: Request, token: Token = Depends
 @router.get("/feed", response_model=dict)
 async def get_feed(request: Request, limit: int = 10, cursor: Optional[str] = None, token: Token = Depends(get_user_token)):
     handler = get_post_handler(request)
-    return await handler.get_feed(user_id=token.sub, limit=limit, cursor=cursor)
+    return await handler.get_feed(limit=limit, cursor=cursor)
+
+@router.get("/following-feed", response_model=dict)
+async def get_following_feed(request: Request, limit: int = 10, cursor: Optional[str] = None, token: Token = Depends(get_user_token)):
+    """
+    Get posts only from users that the logged-in user is following
+    """
+    handler = get_post_handler(request)
+    return await handler.get_following_feed(user_id=token.sub, limit=limit, cursor=cursor)
+
+@router.get("/following-feed/{user_id}", response_model=dict)
+async def get_following_feed_by_user_id(request: Request, user_id: str, limit: int = 10, cursor: Optional[str] = None, token: Token = Depends(get_user_token)):
+    """
+    Get posts from users that a specific user is following (for profile views)
+    """
+    import uuid
+    try:
+        user_uuid = uuid.UUID(user_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid user_id format. Must be a valid UUID.")
+    
+    handler = get_post_handler(request)
+    return await handler.get_following_feed_by_user_id(target_user_id=user_uuid, limit=limit, cursor=cursor)
 
 @router.get("/trending", response_model=dict)
 async def get_trending_posts(request: Request, limit: int = 10, cursor: Optional[str] = None):
