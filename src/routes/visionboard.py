@@ -40,9 +40,9 @@ logger = logging.getLogger(__name__)
 def get_visionboard_handler():
     global visionboard_handler
     if visionboard_handler is None:
-        if not hasattr(app.state, 'pool') or app.state.pool is None:
-            raise HTTPException(status_code=503, detail="Database not available")
-        visionboard_handler = VisionBoardHandler(app.state.pool)
+        # VisionBoardHandler now works with or without pool (uses Supabase)
+        pool = getattr(app.state, 'pool', None)
+        visionboard_handler = VisionBoardHandler(pool)
     return visionboard_handler
 
 def get_token_handler():

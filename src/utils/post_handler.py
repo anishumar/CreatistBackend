@@ -89,6 +89,17 @@ class PostHandler:
             response = await query.execute()
             posts = response.data if response.data else []
             
+            # Add missing fields that iOS app expects
+            for post in posts:
+                post["media"] = []  # Empty media array
+                post["tags"] = []   # Empty tags array
+                post["collaborators"] = []  # Empty collaborators array
+                post["like_count"] = 0
+                post["comment_count"] = 0
+                post["view_count"] = 0
+                post["author_name"] = None
+                post["top_comments"] = []
+            
             return {
                 "posts": posts,
                 "next_cursor": posts[-1]["created_at"] if posts else None
@@ -134,6 +145,17 @@ class PostHandler:
             
             response = await query.execute()
             posts = response.data if response.data else []
+            
+            # Add missing fields that iOS app expects
+            for post in posts:
+                post["media"] = []  # Empty media array
+                post["tags"] = []   # Empty tags array
+                post["collaborators"] = []  # Empty collaborators array
+                post["like_count"] = 0
+                post["comment_count"] = 0
+                post["view_count"] = 0
+                post["author_name"] = None
+                post["top_comments"] = []
             
             return {
                 "posts": posts,

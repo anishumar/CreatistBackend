@@ -24,8 +24,11 @@ import json
 
 
 class VisionBoardHandler:
-    def __init__(self, pool: asyncpg.Pool):
+    def __init__(self, pool: asyncpg.Pool = None):
         self.pool = pool
+        # Import user_handler to use Supabase
+        from src.app import user_handler
+        self.supabase = user_handler.supabase
 
     # Vision Board CRUD Operations
     async def create_notification(self, *, receiver_id, sender_id, object_type, object_id, event_type, data=None, message=None):
@@ -180,37 +183,55 @@ class VisionBoardHandler:
             return result == "DELETE 1"
 
     async def get_user_visionboards(self, *, user_id: uuid.UUID, status: Optional[VisionBoardStatus] = None) -> List[VisionBoard]:
-        """Get all vision boards created by a user"""
-        async with self.pool.acquire() as conn:
-            query = "SELECT * FROM visionboards WHERE created_by = $1"
-            params = [user_id]
+        """Get all vision boards created by a user using Supabase"""
+        try:
+            query = self.supabase.table("visionboards").select("*").eq("created_by", str(user_id)).order("created_at", desc=True)
             
             if status:
-                query += " AND status = $2"
-                params.append(status.value)
+                query = query.eq("status", status.value)
             
-            query += " ORDER BY created_at DESC"
+            response = await query.execute()
+            visionboards = response.data if response.data else []
             
-            rows = await conn.fetch(query, *params)
-            return [VisionBoard(**dict(row)) for row in rows]
+            return [VisionBoard(**vb) for vb in visionboards]
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error getting user visionboards: {e}")
+            return []
 
     async def get_user_assigned_visionboards(self, *, user_id: uuid.UUID, status: Optional[VisionBoardStatus] = None) -> List[VisionBoard]:
-        """Get all vision boards where a user is assigned/partner and assignment is accepted"""
-        async with self.pool.acquire() as conn:
-            query = """
-                SELECT DISTINCT vb.* 
-                FROM visionboards vb
-                JOIN genres g ON vb.id = g.visionboard_id
-                JOIN genre_assignments ga ON g.id = ga.genre_id
-                WHERE ga.user_id = $1 AND ga.status = 'Accepted'
-            """
-            params = [user_id]
+        """Get all vision boards where a user is assigned/partner and assignment is accepted using Supabase"""
+        try:
+            # Get genre assignments for the user
+            assignments_response = await self.supabase.table("genre_assignments").select("genre_id").eq("user_id", str(user_id)).eq("status", "Accepted").execute()
+            genre_ids = [assignment["genre_id"] for assignment in assignments_response.data] if assignments_response.data else []
+            
+            if not genre_ids:
+                return []
+            
+            # Get genres for these assignments
+            genres_response = await self.supabase.table("genres").select("visionboard_id").in_("id", genre_ids).execute()
+            visionboard_ids = [genre["visionboard_id"] for genre in genres_response.data] if genres_response.data else []
+            
+            if not visionboard_ids:
+                return []
+            
+            # Get vision boards
+            query = self.supabase.table("visionboards").select("*").in_("id", visionboard_ids).order("created_at", desc=True)
+            
             if status:
-                query += " AND vb.status = $2"
-                params.append(status.value)
-            query += " ORDER BY vb.created_at DESC"
-            rows = await conn.fetch(query, *params)
-            return [VisionBoard(**dict(row)) for row in rows]
+                query = query.eq("status", status.value)
+            
+            response = await query.execute()
+            visionboards = response.data if response.data else []
+            
+            return [VisionBoard(**vb) for vb in visionboards]
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error getting user assigned visionboards: {e}")
+            return []
 
     # Genre Operations
     async def create_genre(self, visionboard_id: uuid.UUID, genre: GenreCreate) -> Genre:
