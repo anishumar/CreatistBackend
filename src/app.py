@@ -6,7 +6,8 @@ import logging
 import json
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from src.utils import UserHandler  # type: ignore  # noqa
@@ -14,10 +15,22 @@ from src.utils import UserHandler  # type: ignore  # noqa
 logger = logging.getLogger(__name__)
 
 load_dotenv()
+
+# Validate required environment variables
+required_env_vars = [
+    "HOST", "PORT", "JWT_SECRET", "SUPABASE_URL", 
+    "SUPABASE_KEY", "DATABASE_URL"
+]
+
+missing_vars = [var for var in required_env_vars if not os.environ.get(var)]
+if missing_vars:
+    raise ValueError(f"Missing required environment variables: {missing_vars}")
+
 user_handler = UserHandler()
 
 HOST = os.environ["HOST"]
 PORT = os.environ["PORT"]
+ENVIRONMENT = os.environ.get("ENVIRONMENT", "development")
 
 
 class RequestLoggingMiddleware(BaseHTTPMiddleware):
@@ -67,6 +80,31 @@ async def shutdown():
 
 
 app = FastAPI(title="Creatist API Documentation", on_startup=[startup], on_shutdown=[shutdown])
+
+# CORS configuration
+if ENVIRONMENT == "production":
+    cors_origins = [
+        "*"  # Allow all origins for now - update this when you have a frontend domain
+        # "https://your-app.vercel.app",  # Uncomment and add your frontend URL
+        # "https://yourdomain.com",       # Uncomment and add your custom domain
+    ]
+else:
+    cors_origins = [
+        "http://localhost:3000",
+        "http://localhost:8080",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:8080",
+        "*"  # Allow all origins in development
+    ]
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=cors_origins,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["*"],
+)
 
 # Add request logging middleware
 app.add_middleware(RequestLoggingMiddleware)

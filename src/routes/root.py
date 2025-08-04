@@ -29,6 +29,25 @@ async def root(request: Request) -> JSONResponse:
 
     return JSONResponse({"message": "success", "response_time": fin})
 
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint for deployment monitoring"""
+    try:
+        # Test database connection
+        await user_handler.supabase.table("users").select("count").limit(1).execute()
+        return JSONResponse({
+            "status": "healthy",
+            "database": "connected",
+            "timestamp": perf_counter()
+        })
+    except Exception as e:
+        logger.error(f"Health check failed: {e}")
+        raise HTTPException(
+            status_code=503, 
+            detail={"status": "unhealthy", "error": str(e)}
+        )
+
 # Dependency to get current user or None (pseudo, replace with your actual logic)
 async def get_current_user_optional(request: Request) -> Optional[User]:
     from fastapi.security.utils import get_authorization_scheme_param
