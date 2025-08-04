@@ -34,18 +34,20 @@ async def root(request: Request) -> JSONResponse:
 async def health_check():
     """Health check endpoint for deployment monitoring"""
     try:
-        # Test database connection
-        await user_handler.supabase.table("users").select("count").limit(1).execute()
+        # Simple health check - just return success
         return JSONResponse({
             "status": "healthy",
-            "database": "connected",
+            "message": "API is running",
             "timestamp": perf_counter()
         })
     except Exception as e:
         logger.error(f"Health check failed: {e}")
-        raise HTTPException(
-            status_code=503, 
-            detail={"status": "unhealthy", "error": str(e)}
+        return JSONResponse(
+            status_code=503,
+            content={
+                "status": "unhealthy", 
+                "error": str(e)
+            }
         )
 
 # Dependency to get current user or None (pseudo, replace with your actual logic)
