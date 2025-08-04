@@ -1,1 +1,2 @@
-from .app import app  # noqa
+# Import app only when needed
+# from .app import app  # noqa

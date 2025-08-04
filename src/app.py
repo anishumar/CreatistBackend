@@ -18,7 +18,7 @@ load_dotenv()
 
 # Validate required environment variables
 required_env_vars = [
-    "HOST", "PORT", "JWT_SECRET", "SUPABASE_URL", 
+    "JWT_SECRET", "SUPABASE_URL", 
     "SUPABASE_KEY", "DATABASE_URL"
 ]
 
@@ -28,8 +28,9 @@ if missing_vars:
 
 user_handler = UserHandler()
 
-HOST = os.environ["HOST"]
-PORT = os.environ["PORT"]
+# Set defaults for Railway deployment
+HOST = os.environ.get("HOST", "0.0.0.0")
+PORT = os.environ.get("PORT", "8080")
 ENVIRONMENT = os.environ.get("ENVIRONMENT", "development")
 
 
