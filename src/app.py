@@ -64,20 +64,33 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
 
 
 async def startup():
-    await user_handler.init()
+    try:
+        await user_handler.init()
+        logger.info("✅ Supabase client initialized")
+    except Exception as e:
+        logger.error(f"❌ Failed to initialize Supabase client: {e}")
+        # Continue without Supabase for now
 
     # Initialize PostgreSQL connection pool
-    app.state.pool = await asyncpg.create_pool(
-        os.environ["DATABASE_URL"],
-        min_size=1,
-        max_size=10
-    )
+    try:
+        app.state.pool = await asyncpg.create_pool(
+            os.environ["DATABASE_URL"],
+            min_size=1,
+            max_size=10
+        )
+        logger.info("✅ PostgreSQL connection pool created")
+    except Exception as e:
+        logger.error(f"❌ Failed to create PostgreSQL pool: {e}")
+        app.state.pool = None  # Set to None so we can check later
+    
     app.state.jwt_secret = os.environ["JWT_SECRET"]
+    logger.info("✅ App startup completed")
 
 
 async def shutdown():
-    if hasattr(app.state, 'pool'):
+    if hasattr(app.state, 'pool') and app.state.pool is not None:
         await app.state.pool.close()
+        logger.info("✅ PostgreSQL connection pool closed")
 
 
 app = FastAPI(title="Creatist API Documentation", on_startup=[startup], on_shutdown=[shutdown])

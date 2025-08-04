@@ -34,10 +34,15 @@ async def root(request: Request) -> JSONResponse:
 async def health_check():
     """Health check endpoint for deployment monitoring"""
     try:
-        # Simple health check - just return success
+        # Check if database is available
+        db_status = "connected"
+        if hasattr(app.state, 'pool') and app.state.pool is None:
+            db_status = "disconnected"
+        
         return JSONResponse({
             "status": "healthy",
             "message": "API is running",
+            "database": db_status,
             "timestamp": perf_counter()
         })
     except Exception as e:
@@ -76,6 +81,11 @@ async def send_feedback(
         raise HTTPException(status_code=400, detail="Message cannot be empty.")
     if len(feedback.message) > 2000:
         raise HTTPException(status_code=400, detail="Message too long.")
+    
+    # Check if database is available
+    if not hasattr(request.app.state, 'pool') or request.app.state.pool is None:
+        raise HTTPException(status_code=503, detail="Database not available")
+    
     query = """
         INSERT INTO feedback (user_id, email, message)
         VALUES ($1, $2, $3)
