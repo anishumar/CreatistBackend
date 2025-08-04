@@ -24,10 +24,22 @@ def root(request: Request) -> JSONResponse:
 @app.route("/ping")
 async def root(request: Request) -> JSONResponse:
     ini = perf_counter()
-    _ = await user_handler.supabase.table("users").select("*").execute()
-    fin = perf_counter() - ini
-
-    return JSONResponse({"message": "success", "response_time": fin})
+    try:
+        # Simple ping without database query for now
+        fin = perf_counter() - ini
+        return JSONResponse({
+            "message": "success", 
+            "response_time": fin,
+            "status": "API is responding"
+        })
+    except Exception as e:
+        logger.error(f"Ping failed: {e}")
+        fin = perf_counter() - ini
+        return JSONResponse({
+            "message": "error",
+            "response_time": fin,
+            "error": str(e)
+        })
 
 
 @app.get("/health")

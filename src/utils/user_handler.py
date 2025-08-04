@@ -18,15 +18,25 @@ from fastapi import HTTPException
 load_dotenv()
 
 _options = AsyncClientOptions()
-_options.headers.update({"verify_ssl": False})
+# Remove the problematic header that's causing the boolean error
+# _options.headers.update({"verify_ssl": False})
 class UserHandler:
     supabase: AsyncClient
 
     async def init(self):
-        self.supabase = await create_async_client(
-            os.environ.get("SUPABASE_URL"), os.environ.get("SUPABASE_KEY"),
-            options=_options
-        )
+        try:
+            self.supabase = await create_async_client(
+                os.environ.get("SUPABASE_URL"), 
+                os.environ.get("SUPABASE_KEY"),
+                options=_options
+            )
+            # Test the connection
+            await self.supabase.table("users").select("count").limit(1).execute()
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Failed to initialize Supabase client: {e}")
+            raise
 
     # User Management Methods
     async def fetch_user(
