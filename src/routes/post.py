@@ -15,6 +15,8 @@ from src.routes.visionboard import get_user_token
 logger = logging.getLogger(__name__)
 
 def get_post_handler(request: Request) -> PostHandler:
+    if not hasattr(request.app.state, 'pool') or request.app.state.pool is None:
+        raise HTTPException(status_code=503, detail="Database not available")
     return PostHandler(request.app.state.pool)
 
 router = APIRouter(prefix="/posts", tags=["Posts"])

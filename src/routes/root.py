@@ -25,11 +25,23 @@ def root(request: Request) -> JSONResponse:
 async def root(request: Request) -> JSONResponse:
     ini = perf_counter()
     try:
-        # Simple ping without database query for now
+        # Check database connection
+        db_status = "disconnected"
+        if hasattr(app.state, 'pool') and app.state.pool is not None:
+            try:
+                # Test database connection
+                async with app.state.pool.acquire() as conn:
+                    await conn.fetchval("SELECT 1")
+                db_status = "connected"
+            except Exception as e:
+                logger.error(f"Database connection test failed: {e}")
+                db_status = "error"
+        
         fin = perf_counter() - ini
         return JSONResponse({
             "message": "success", 
             "response_time": fin,
+            "database": db_status,
             "status": "API is responding"
         })
     except Exception as e:
