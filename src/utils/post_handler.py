@@ -156,6 +156,7 @@ class PostHandler:
             raise
 
     async def get_feed(self, limit: int = 10, cursor: Optional[str] = None) -> dict:
+        self._check_pool()
         import datetime
         async with self.pool.acquire() as conn:
             params = []
@@ -187,6 +188,7 @@ class PostHandler:
         """
         Get posts only from users that the logged-in user is following
         """
+        self._check_pool()
         import datetime
         import logging
         async with self.pool.acquire() as conn:
@@ -257,6 +259,7 @@ class PostHandler:
         """
         Get posts from users that a specific user is following (for profile views)
         """
+        self._check_pool()
         import datetime
         import logging
         async with self.pool.acquire() as conn:
@@ -324,6 +327,7 @@ class PostHandler:
             return {"posts": posts, "nextCursor": next_cursor}
 
     async def get_post_by_id(self, post_id: uuid.UUID) -> Optional[PostWithDetails]:
+        self._check_pool()
         async with self.pool.acquire() as conn:
             row = await conn.fetchrow("SELECT * FROM posts WHERE id = $1 AND deleted_at IS NULL", post_id)
             if not row:
@@ -331,6 +335,7 @@ class PostHandler:
             return await self._post_with_details(conn, row)
 
     async def like_post(self, post_id: uuid.UUID, user_id: uuid.UUID):
+        self._check_pool()
         async with self.pool.acquire() as conn:
             await conn.execute(
                 "INSERT INTO post_likes (user_id, post_id, created_at) VALUES ($1, $2, now()) ON CONFLICT DO NOTHING",
@@ -338,6 +343,7 @@ class PostHandler:
             )
 
     async def unlike_post(self, post_id: uuid.UUID, user_id: uuid.UUID):
+        self._check_pool()
         async with self.pool.acquire() as conn:
             await conn.execute(
                 "DELETE FROM post_likes WHERE user_id = $1 AND post_id = $2",
@@ -345,6 +351,7 @@ class PostHandler:
             )
 
     async def add_comment(self, post_id: uuid.UUID, user_id: uuid.UUID, comment: PostCommentCreate) -> PostComment:
+        self._check_pool()
         async with self.pool.acquire() as conn:
             comment_id = uuid.uuid4()
             await conn.execute(
@@ -365,6 +372,7 @@ class PostHandler:
             )
 
     async def get_comments(self, post_id: uuid.UUID, parent_id: Optional[uuid.UUID] = None, limit: int = 10, cursor: Optional[str] = None) -> List[PostComment]:
+        self._check_pool()
         async with self.pool.acquire() as conn:
             params = [post_id]
             query = "SELECT * FROM post_comments WHERE post_id = $1 AND deleted_at IS NULL"
