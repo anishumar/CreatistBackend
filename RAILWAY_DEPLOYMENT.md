@@ -97,7 +97,7 @@ curl https://your-railway-app.railway.app/health
 # Test signin
 curl -X POST https://your-railway-app.railway.app/auth/signin \
   -H "Content-Type: application/json" \
-  -d '{"email":"anishumar01@gmail.com","password":"abcd123"}'
+  -d '{"email":"your-email@example.com","password":"your-password"}'
 ```
 
 ### 6. Troubleshooting

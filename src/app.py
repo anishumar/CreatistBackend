@@ -13,6 +13,8 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from src.utils import UserHandler  # type: ignore  # noqa
 
+# Configure logging
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 load_dotenv()
@@ -66,12 +68,30 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
 async def startup():
     await user_handler.init()
 
-    # Initialize PostgreSQL connection pool
-    app.state.pool = await asyncpg.create_pool(
-        os.environ["DATABASE_URL"],
-        min_size=1,
-        max_size=10
-    )
+    # Initialize PostgreSQL connection pool with error handling
+    try:
+        database_url = os.environ.get("DATABASE_URL")
+        if not database_url:
+            logger.error("DATABASE_URL environment variable is not set")
+            raise ValueError("DATABASE_URL is required")
+            
+        logger.info("Connecting to database...")
+        app.state.pool = await asyncpg.create_pool(
+            database_url,
+            min_size=1,
+            max_size=10,
+            command_timeout=60,
+            server_settings={
+                'application_name': 'creatist_backend'
+            }
+        )
+        logger.info("Database connection pool created successfully")
+        
+    except Exception as e:
+        logger.error(f"Failed to connect to database: {e}")
+        logger.error("Please check your DATABASE_URL environment variable")
+        raise e
+    
     app.state.jwt_secret = os.environ["JWT_SECRET"]
 
 
