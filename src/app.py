@@ -22,12 +22,16 @@ load_dotenv()
 # Validate required environment variables
 required_env_vars = [
     "HOST", "PORT", "JWT_SECRET", "SUPABASE_URL", 
-    "SUPABASE_KEY", "DATABASE_URL"
+    "SUPABASE_KEY"
 ]
 
 missing_vars = [var for var in required_env_vars if not os.environ.get(var)]
 if missing_vars:
     raise ValueError(f"Missing required environment variables: {missing_vars}")
+
+# DATABASE_URL is optional - app can run without database
+if not os.environ.get("DATABASE_URL"):
+    print("⚠️  Warning: DATABASE_URL not set - some features may not work")
 
 user_handler = UserHandler()
 
@@ -72,31 +76,31 @@ async def startup():
     try:
         database_url = os.environ.get("DATABASE_URL")
         if not database_url:
-            logger.error("DATABASE_URL environment variable is not set")
-            raise ValueError("DATABASE_URL is required")
-            
-        logger.info("Connecting to database...")
-        app.state.pool = await asyncpg.create_pool(
-            database_url,
-            min_size=1,
-            max_size=10,
-            command_timeout=60,
-            server_settings={
-                'application_name': 'creatist_backend'
-            }
-        )
-        logger.info("Database connection pool created successfully")
+            logger.warning("DATABASE_URL environment variable is not set - some features may not work")
+            app.state.pool = None
+        else:
+            logger.info("Connecting to database...")
+            app.state.pool = await asyncpg.create_pool(
+                database_url,
+                min_size=1,
+                max_size=10,
+                command_timeout=60,
+                server_settings={
+                    'application_name': 'creatist_backend'
+                }
+            )
+            logger.info("Database connection pool created successfully")
         
     except Exception as e:
         logger.error(f"Failed to connect to database: {e}")
-        logger.error("Please check your DATABASE_URL environment variable")
-        raise e
+        logger.warning("Application will start without database connection - some features may not work")
+        app.state.pool = None
     
     app.state.jwt_secret = os.environ["JWT_SECRET"]
 
 
 async def shutdown():
-    if hasattr(app.state, 'pool'):
+    if hasattr(app.state, 'pool') and app.state.pool is not None:
         await app.state.pool.close()
 
 
