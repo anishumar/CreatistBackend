@@ -18,7 +18,6 @@ from fastapi import HTTPException
 load_dotenv()
 
 _options = AsyncClientOptions()
-_options.headers.update({"verify_ssl": False})
 class UserHandler:
     supabase: AsyncClient
 
