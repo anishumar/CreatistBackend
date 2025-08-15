@@ -3,6 +3,7 @@ import datetime
 import logging
 from typing import List, Optional
 import asyncpg
+from fastapi import HTTPException
 from src.models.post import (
     Post, PostCreate, PostUpdate, PostWithDetails, PostMedia, PostMediaCreate, PostTag, PostCollaborator, PostCollaboratorCreate, PostComment, PostCommentCreate, PostCommentUpdate
 )
