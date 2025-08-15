@@ -4,6 +4,8 @@ from time import perf_counter
 import logging
 
 from fastapi import Request, HTTPException, status, Depends
+
+logger = logging.getLogger(__name__)
 from fastapi.responses import JSONResponse
 from typing import Optional
 from src.models.feedback import FeedbackCreate
