@@ -4,6 +4,7 @@ import os
 import asyncpg
 import logging
 import json
+import time
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request, HTTPException
@@ -81,33 +82,48 @@ async def shutdown():
 
 app = FastAPI(title="Creatist API Documentation", on_startup=[startup], on_shutdown=[shutdown])
 
-# CORS configuration
+# CORS configuration - iOS app doesn't need CORS
+# CORS is only needed for web browsers, iOS apps make direct HTTP requests
+# Keeping minimal CORS for potential web admin panel or testing
+ENVIRONMENT = os.environ.get("ENVIRONMENT", "development")
+
 if ENVIRONMENT == "production":
-    cors_origins = [
-        "*"  # Allow all origins for now - update this when you have a frontend domain
-        # "https://your-app.vercel.app",  # Uncomment and add your frontend URL
-        # "https://yourdomain.com",       # Uncomment and add your custom domain
-    ]
+    # Minimal CORS for production - only if needed for admin panel
+    cors_origins = []
 else:
+    # Development CORS - for testing with web tools
     cors_origins = [
         "http://localhost:3000",
-        "http://localhost:8080",
+        "http://localhost:8080", 
+        "http://localhost:3001",
+        "http://localhost:5173",
         "http://127.0.0.1:3000",
         "http://127.0.0.1:8080",
-        "*"  # Allow all origins in development
+        "http://127.0.0.1:3001",
+        "http://127.0.0.1:5173",
     ]
 
-# Add CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=cors_origins,
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["*"],
-)
+# Add CORS middleware only if origins are specified
+if cors_origins:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=cors_origins,
+        allow_credentials=True,
+        allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        allow_headers=["*"],
+    )
 
 # Add request logging middleware
 app.add_middleware(RequestLoggingMiddleware)
+
+# Health check endpoint
+@app.get("/health")
+async def health_check():
+    return {
+        "status": "healthy",
+        "message": "API is running",
+        "timestamp": time.time()
+    }
 
 from .routes import *  # noqa
 from .routes.ws_chat import router as ws_router

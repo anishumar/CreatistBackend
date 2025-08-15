@@ -2,21 +2,44 @@ from __future__ import annotations
 
 import logging
 import logging.handlers
+import os
 from collections import deque, namedtuple
 from datetime import datetime
 from typing import Iterable
 
 from pytz import timezone
 
+# Get environment
+ENVIRONMENT = os.environ.get("ENVIRONMENT", "development")
+LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
+
+# Configure logging level based on environment
+if ENVIRONMENT == "production":
+    log_level = getattr(logging, LOG_LEVEL.upper(), logging.INFO)
+else:
+    log_level = logging.DEBUG
+
+# Create logs directory if it doesn't exist
+os.makedirs("logs", exist_ok=True)
+
 filehandler = logging.handlers.RotatingFileHandler(
     "logs/log.log",
-    maxBytes=1024 * 1024 * 5,
+    maxBytes=1024 * 1024 * 5,  # 5MB
+    backupCount=5,  # Keep 5 backup files
     mode="a",
 )
-filehandler.setLevel(logging.DEBUG)
-formatter = logging.Formatter(
-    "%(asctime)s - %(name)s - %(levelname)s - %(funcName)s - %(message)s"
-)
+filehandler.setLevel(log_level)
+
+# Production-friendly formatter
+if ENVIRONMENT == "production":
+    formatter = logging.Formatter(
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    )
+else:
+    formatter = logging.Formatter(
+        "%(asctime)s - %(name)s - %(levelname)s - %(funcName)s - %(message)s"
+    )
+
 filehandler.setFormatter(formatter)
 
 
@@ -35,7 +58,7 @@ class Record(namedtuple("Record", ["time", "name", "levelname", "msg"])):
 class CustomLogger:
     def __init__(self, name: str):
         self.logger = logging.getLogger(name)
-        self.logger.setLevel(logging.DEBUG)
+        self.logger.setLevel(log_level)
         self.logger.addHandler(filehandler)
 
         self._recent_logs = deque(maxlen=1024)
