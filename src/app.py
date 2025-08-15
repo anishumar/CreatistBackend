@@ -85,6 +85,7 @@ async def startup():
                 min_size=1,
                 max_size=10,
                 command_timeout=60,
+                statement_cache_size=0,  # Disable prepared statements for pgbouncer compatibility
                 server_settings={
                     'application_name': 'creatist_backend'
                 }
