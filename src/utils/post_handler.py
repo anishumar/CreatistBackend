@@ -12,9 +12,15 @@ logger = logging.getLogger(__name__)
 class PostHandler:
     def __init__(self, pool: asyncpg.Pool):
         self.pool = pool
+    
+    def _check_pool(self):
+        """Check if database pool is available"""
+        if not self.pool:
+            raise HTTPException(status_code=503, detail="Database connection not available")
 
     async def create_post(self, post: PostCreate, user_id: uuid.UUID) -> uuid.UUID:
         """Create a new post with comprehensive debug logging"""
+        self._check_pool()
         logger.info("🔧 PostHandler.create_post - Starting post creation")
         logger.info(f"   User ID: {user_id}")
         logger.info(f"   Post data: {post.model_dump()}")
@@ -376,6 +382,7 @@ class PostHandler:
             return [PostComment(**dict(row)) for row in rows]
 
     async def get_user_posts(self, user_id: uuid.UUID, limit: int = 10, cursor: Optional[str] = None) -> List[PostWithDetails]:
+        self._check_pool()
         async with self.pool.acquire() as conn:
             params = [user_id]
             query = "SELECT * FROM posts WHERE user_id = $1 AND deleted_at IS NULL"
@@ -388,6 +395,7 @@ class PostHandler:
             return [await self._post_with_details(conn, row) for row in rows]
 
     async def search_posts(self, q: str, tag: Optional[str] = None, limit: int = 10, cursor: Optional[str] = None) -> List[PostWithDetails]:
+        self._check_pool()
         async with self.pool.acquire() as conn:
             params = [f"%{q}%"]
             query = "SELECT * FROM posts WHERE deleted_at IS NULL AND caption ILIKE $1"
@@ -405,6 +413,7 @@ class PostHandler:
     async def get_trending_posts(self, limit: int = 10, cursor: Optional[str] = None) -> dict:
         import datetime
         import logging
+        self._check_pool()
         async with self.pool.acquire() as conn:
             query = """
                 SELECT p.* FROM posts p

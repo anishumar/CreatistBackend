@@ -4,6 +4,7 @@ import datetime
 from decimal import Decimal
 from typing import List, Optional, Dict, Any
 import asyncpg
+from fastapi import HTTPException
 from src.models.visionboard import (
     VisionBoard, VisionBoardCreate, VisionBoardUpdate, VisionBoardWithGenres,
     Genre, GenreCreate, GenreUpdate, GenreWithAssignments,
@@ -26,6 +27,11 @@ import json
 class VisionBoardHandler:
     def __init__(self, pool: asyncpg.Pool):
         self.pool = pool
+    
+    def _check_pool(self):
+        """Check if database pool is available"""
+        if not self.pool:
+            raise HTTPException(status_code=503, detail="Database connection not available")
 
     # Vision Board CRUD Operations
     async def create_notification(self, *, receiver_id, sender_id, object_type, object_id, event_type, data=None, message=None):

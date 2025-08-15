@@ -40,6 +40,8 @@ logger = logging.getLogger(__name__)
 def get_visionboard_handler():
     global visionboard_handler
     if visionboard_handler is None:
+        if not hasattr(app.state, 'pool') or app.state.pool is None:
+            raise HTTPException(status_code=503, detail="Database connection not available")
         visionboard_handler = VisionBoardHandler(app.state.pool)
     return visionboard_handler
 
